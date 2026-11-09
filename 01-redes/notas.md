@@ -89,7 +89,7 @@ Cliente --- ACK -------------> Servidor
 ### HTTP vs HTTPS
 Entre HTTP y HTTPS pude ver que el handshake se ve igual, pero el contenido no es legible, ya que esta cifrado. El contenido cifrado no se puede inspeccionar sin descifrado.
 
-### Notas
+## Notas
 Los datos se encapsulan de arriba hacia abajo. 
 Cuando un puerto esta cerrado, la flag que responde a un SYN es RST.
 Tambien puedo usar el filtro tcp.flags.syn == 1 && tcp.flags.ack == 0 para ver solo los SYN sin ACK
