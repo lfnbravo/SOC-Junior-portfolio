@@ -94,10 +94,3 @@ Los datos se encapsulan de arriba hacia abajo.
 Cuando un puerto esta cerrado, la flag que responde a un SYN es RST.
 Tambien puedo usar el filtro tcp.flags.syn == 1 && tcp.flags.ack == 0 para ver solo los SYN sin ACK
 EN EL CASO DE APLICAR EL FILTRO tcp.flags.syn == 1 && tcp.flags.ack == 0 y se ven cientos o miles de SYN desde una misma ip hacia muchos puertos/ip, podria estar tratandose de un escaneo de puertos, por lo que merece ser investigado
-
-- [COMPLETAR]
-
-## 11. Recursos usados
-- TryHackMe: Pre Security / Network Fundamentals
-- malware-traffic-analysis.net (citar el ejercicio específico: [COMPLETAR])
-- subnetting.net
