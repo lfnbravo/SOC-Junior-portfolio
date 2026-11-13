@@ -1,0 +1,164 @@
+## 5b. HTTP (puerto 80, HTTPS 443)
+
+### Qué es
+Protocolo de **petición y respuesta** sobre TCP. El cliente pide y el servidor responde. Sin TLS, todo viaja en texto legible.
+
+```
+Cliente --- GET /index.html HTTP/1.1 ---> Servidor
+Cliente <-- HTTP/1.1 200 OK + contenido -- Servidor
+```
+
+### Métodos
+| Método | Uso | Desde seguridad |
+|---|---|---|
+| GET | Pedir un recurso | Descargas de malware, consultas a C2 |
+| POST | Enviar datos | Logins, exfiltración, respuestas de beaconing |
+| PUT / DELETE | Subir o borrar | Poco comunes: revisar si aparecen |
+| HEAD / OPTIONS | Metadatos | Reconocimiento |
+
+### Códigos de estado
+| Código | Significado | Qué buscar |
+|---|---|---|
+| 200 | OK | Normal |
+| 301 / 302 | Redirección | Cadenas largas: phishing, malvertising |
+| 401 / 403 | No autenticado / prohibido | Muchos seguidos: fuerza bruta o escaneo |
+| 404 | No encontrado | Ráfagas: enumeración de directorios |
+| 500 | Error del servidor | Posible explotación o fuzzing |
+
+### Cabeceras
+| Cabecera | Viaja en | Por qué importa |
+|---|---|---|
+| Host | Petición | Destino real aunque la IP sea de una CDN |
+| User-Agent | Petición | Software que dice ser el cliente (**falsificable**) |
+| Referer | Petición | Reconstruir de dónde llegó el usuario |
+| Cookie | Petición | Robo de sesiones |
+| Content-Type / Content-Length | Respuesta (y petición en POST) | Tipo y tamaño; tamaños idénticos y repetidos: beaconing |
+
+**Limitación:** con HTTPS el contenido va cifrado. Sin descifrado solo veo IPs, puertos, el DNS previo y el SNI. Por eso DNS es tan valioso.
+
+### Filtros
+| Filtro | Para qué sirve |
+|---|---|
+| `http` | Todo el HTTP |
+| `http.request` / `http.response` | Solo peticiones / respuestas |
+| `http.request.method == "GET"` | Solo GET |
+| `http.request.method == "POST"` | Solo POST |
+| `http.response.code == 404` | Solo 404 |
+| `http.host contains "..."` | Por dominio |
+| `http.user_agent contains "curl"` | Por User-Agent |
+
+**Cómo armar filtros:** `protocolo.campo operador valor`. Atajo: clic derecho en un campo → *Apply as Filter → Selected*.
+
+### Laboratorio
+**Entorno:** captura en [COMPLETAR: Windows / Kali], interfaz [COMPLETAR].
+
+**Ejercicio 1 (`http://httpforever.com`)**
+| Dato | Valor |
+|---|---|
+| Método | GET |
+| Host | httpforever.com |
+| User-Agent | Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ... Chrome/157.0.0.0 Safari/537.36 |
+| Código de respuesta | HTTP/1.1 200 OK |
+
+**Ejercicio 2 (Follow TCP Stream)**
+- Petición: Host, User-Agent, Referer (`http://httpforever.com/`).
+- Respuesta: Content-Type `text/html`.
+- Aprendí que las cabeceras se dividen entre petición (las manda el cliente) y respuesta (las manda el servidor).
+
+**Ejercicio 3 (POST con datos inventados)**
+- Comando: `curl -X POST -d "usuario=lab&password=1234" http://httpbin.org/post`
+- Resultado: vi `usuario=lab&password=1234` en texto plano con Follow TCP Stream.
+- Conclusión: en HTTP sin cifrar las credenciales viajan legibles. [COMPLETAR con mis palabras]
+
+**Ejercicio 4 (User-Agent)**
+- User-Agent de curl: [COMPLETAR]
+- User-Agent de mi navegador: Mozilla/5.0 ... Chrome
+- Con `curl -A "Mozilla/5.0"` el tráfico se ve igual que el de un navegador, salvo esa línea. [COMPLETAR resultado de mi captura]
+- **¿Por qué se puede falsificar y qué implica?** [COMPLETAR con mis palabras. Ideas: lo escribe el propio cliente; un atacante puede copiar el de Chrome; sirve como señal débil que se correlaciona con destino, frecuencia, tamaño y proceso]
+
+**Captura:** [insertar imagen con el Follow TCP Stream del POST, con datos inventados]
+
+### Lo que me confundió
+Pensé que el User-Agent indicaba si la comunicación estaba cifrada. Es incorrecto: el cifrado depende de HTTP vs HTTPS (TLS). El User-Agent solo informa qué software **dice** ser el cliente, y como lo declara el propio cliente puede falsificarse, por lo que no es una prueba definitiva.
+
+### Señales sospechosas en HTTP
+| Señal | Posible causa |
+|---|---|
+| Cientos de 404 seguidos desde una IP | Enumeración de directorios (gobuster, dirb, ffuf) |
+| Muchos 401/403 seguidos | Fuerza bruta o escaneo |
+| POST repetidos de tamaño idéntico a intervalos regulares | Beaconing |
+| User-Agent de herramienta (`curl`, `python-requests`) o vacío en un equipo de oficina | Script o malware (puede estar falsificado) |
+| Credenciales en texto plano | Falta de cifrado |
+| Cadenas largas de redirecciones | Phishing, malvertising |
+
+---
+
+## 5c. ARP
+
+### Qué es
+Resuelve **IP a MAC** dentro de la red local. Sin la MAC de destino no se puede armar la trama Ethernet.
+
+```
+Cliente --- (broadcast) ¿Quién tiene 192.168.1.1? ---> Toda la LAN
+Router  --- (unicast)   192.168.1.1 está en XX:XX... -> Cliente
+```
+- Request (opcode 1): broadcast, "who has".
+- Reply (opcode 2): unicast, "is at".
+- Las respuestas se guardan en la caché ARP.
+- **Gratuitous ARP:** un equipo anuncia su propia IP/MAC sin que nadie pregunte. Legítimo al arrancar o cambiar de IP, pero también lo usan los atacantes.
+
+### Vulnerabilidad: ARP spoofing / poisoning
+ARP **no tiene autenticación**: un equipo acepta respuestas que nadie pidió. Un atacante en la misma LAN dice "la IP del gateway tiene mi MAC", las víctimas actualizan su caché y le mandan el tráfico a él (**man-in-the-middle**).
+
+### Cómo se detecta
+| Señal | Significado |
+|---|---|
+| Una misma IP asociada a **dos MAC distintas** | Posible spoofing o conflicto de IP |
+| Muchas respuestas ARP **sin request previo** | Respuestas no solicitadas |
+| Un equipo anunciando la MAC del gateway | Casi seguro sospechoso |
+| Expert Info: "duplicate use of IP address" | Marca de Wireshark |
+
+**Defensas:** Dynamic ARP Inspection, port security, entradas ARP estáticas en equipos críticos y monitoreo de cambios IP-MAC.
+
+### Filtros
+| Filtro | Para qué sirve |
+|---|---|
+| `arp` | Todo el ARP |
+| `arp.opcode == 1` | Solo requests |
+| `arp.opcode == 2` | Solo replies |
+| `arp.duplicate-address-detected` | Conflictos de IP (posible spoofing) |
+
+### Laboratorio (ejercicio 6)
+**Comandos:** `arp -a` / `ip neigh` (ver caché), `arp -d *` / `sudo ip neigh flush all` (limpiar), `ping 192.168.1.1`.
+
+| Dato | Valor |
+|---|---|
+| Request | "Who has 192.168.1.1? Tell 192.168.1.2" |
+| ¿Broadcast? | Sí (`ff:ff:ff:ff:ff:ff`) |
+| Reply | "192.168.1.1 is at a8:d4:e0:xx:xx:xx" (enmascarar la parte final al publicar) |
+| ¿Reply unicast? | [COMPLETAR: confirmar en la captura] |
+| Entrada en la caché tras el ping | [COMPLETAR: confirmar con `arp -a` o `ip neigh`] |
+| OUI (primeros 3 bytes) y fabricante | a8:d4:e0 / [COMPLETAR tras buscarlo] |
+
+**Captura:** [insertar imagen del request y reply, con MAC enmascaradas]
+
+### Ejercicio 7 (reconocer un spoofing)
+Pendiente: se retoma en la semana 3 con una captura de ejemplo. Filtro de partida: `arp.duplicate-address-detected` y *Analyze → Expert Information*.
+
+---
+
+## Checkpoint de la clase 4
+1. **GET vs POST y exfiltración:** GET pide un recurso y POST envía datos. Sospecharía de POST para exfiltración, aunque el método solo no alcanza: miro tamaño, frecuencia y destino. [COMPLETAR con mis palabras]
+2. **Cientos de 404 desde una IP:** hipótesis de enumeración de directorios. Verifico User-Agent, velocidad, si hay algún 200 o 301 entre los 404 y si la IP es interna o externa.
+3. **ARP vulnerable:** no tiene autenticación. En un spoofing veo una IP asociada a dos MAC, respuestas no solicitadas y el aviso de IP duplicada en Expert Info.
+4. **User-Agent no es prueba definitiva:** lo declara el cliente y se puede falsificar; además software legítimo usa UA raros. (Antes creí que indicaba si había cifrado: ver "Lo que me confundió".)
+
+## Pendientes de la clase 3 (entrevista)
+- [ ] Un host genera 300 NXDOMAIN en 2 minutos con nombres aleatorios: ¿qué hipótesis planteo y qué hago primero?
+- [ ] ¿Por qué una IP de Cloudflare en una respuesta DNS no alcanza para decir que un dominio es legítimo?
+
+## Pendientes de la clase 4
+- [ ] Completar ejercicios 3 y 4 con mis palabras
+- [ ] Confirmar reply unicast y entrada en la caché ARP
+- [ ] Insertar capturas (con MAC enmascaradas)
+- [ ] Ejercicio 7 (semana 3)
