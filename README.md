@@ -28,7 +28,7 @@ Técnico en Ciberseguridad en camino a **SOC Analyst Junior**. Este repositorio 
 
 ## Roadmap y progreso
 
-- [x] **01. Redes** (en curso)
+- [ ] **01. Redes** (en curso)
 - [ ] 02. Windows
 - [ ] 03. Linux
 - [ ] 04. Identidad (AD, Kerberos, NTLM, MFA)
