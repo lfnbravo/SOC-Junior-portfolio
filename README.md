@@ -9,7 +9,7 @@ Técnico en Ciberseguridad en camino a **SOC Analyst Junior**. Este repositorio 
 - Técnico en Ciberseguridad con formación en redes (diplomatura).
 - Objetivo: trabajar como analista SOC (Nivel 1) en detección, triage y respuesta a incidentes.
 - Enfoque: aprender haciendo. Cada tema termina en un laboratorio y un write-up.
-- Ubicación: [Ciudad, País] | Disponibilidad: [remoto / presencial / híbrido]
+- Ubicación: [Argentina] | Disponibilidad: [remoto / híbrido]
 
 ## Contacto
 
